@@ -1,0 +1,3 @@
+[submodule "HTPI"]
+	path = HTPI
+	url = https://github.com/djvelleman/HTPILeanPackage
