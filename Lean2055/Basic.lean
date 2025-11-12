@@ -23,6 +23,12 @@ macro_rules
   `(tactic| cases $h:term with cleanup at $h:ident
     | inl $h => ?_ | inr $h => ?_)
 
+scoped syntax "split_ors" colGt Lean.Parser.Tactic.location : tactic
+macro_rules
+| `(tactic| split_ors at $h:ident) =>
+  `(tactic| try (split_or at $h:ident <;> split_ors at $h:ident))
+
+
 scoped syntax (priority := high) "left" colGt (ident)? : tactic
 macro_rules
 | `(tactic| left $h) =>
@@ -143,24 +149,6 @@ def setOf {U : Type _} (P : U → Prop) : Set U := P
 
 protected theorem SetOf.def {U : Type} (P : U → Prop) (x : U) : x ∈ setOf P ↔ P x := .rfl
 
-def Dom {U V : Type _} (R : Set (U × V)) : Set U := setOf fun x : U => ∃ (y : V), (x, y) ∈ R
-
-def Ran {U V : Type _} (R : Set (U × V)) : Set V := setOf fun y : V => ∃ (x : U), (x, y) ∈ R
-
-macro_rules
-| `(tactic| unfold Subset $[$loc:location]?) => `(tactic| simp only [Subset.def] $[$loc]?)
-| `(tactic| unfold Inter $[$loc:location]?) => `(tactic| simp only [Inter.def] $[$loc]?)
-| `(tactic| unfold Union $[$loc:location]?) => `(tactic| simp only [Union.def] $[$loc]?)
-| `(tactic| unfold SDiff $[$loc:location]?) => `(tactic| simp only [SDiff.def] $[$loc]?)
-| `(tactic| unfold Empty $[$loc:location]?) => `(tactic| simp only [Empty.def] $[$loc]?)
-| `(tactic| unfold SetOf $[$loc:location]?) => `(tactic| simp only [SetOf.def] $[$loc]?)
-| `(tactic| unfold Enum $[$loc:location]?) =>
-  `(tactic|
-      (try simp only [Insert.forall, Insert.exists,
-        Singleton.forall, Singleton.exists,
-        Empty.forall, Empty.exists, -eq_self] $[$loc]?) <;>
-      (try simp only [Insert.def, Singleton.def, Empty.def, -eq_self] $[$loc]?))
-
 syntax (name := setBuilder) "{" Batteries.ExtendedBinder.extBinder " | " term "}" : term
 
 @[term_elab setBuilder]
@@ -175,6 +163,37 @@ def elabSetBuilder : Lean.Elab.Term.TermElab
 
 @[app_unexpander setOf]
 def setOf.unexpander : Lean.PrettyPrinter.Unexpander
-  | `($_ fun $x:ident ↦ $p) => `({ $x:ident | $p })
-  | `($_ fun ($x:ident : $ty:term) ↦ $p) => `({ $x:ident : $ty:term | $p })
+  | `($_ fun $x:ident => $p) => `({ $x:ident | $p })
+  | `($_ fun ($x:ident : $ty:term) => $p) => `({ $x:ident : $ty:term | $p })
   | _ => throw ()
+
+namespace Relation
+
+def Dom {U V : Type _} (R : Set (U × V)) : Set U := setOf fun x : U => ∃ (y : V), (x, y) ∈ R
+
+def Ran {U V : Type _} (R : Set (U × V)) : Set V := setOf fun y : V => ∃ (x : U), (x, y) ∈ R
+
+protected def inv {U V : Type _} (R : Set (U × V)) : Set (V × U) :=
+  { p | (p.2, p.1) ∈ R}
+
+protected def comp {U V : Type _} (R : Set (V × W)) (S : Set (U × V)) : Set (U × W) :=
+  { p | ∃ (y : V), (p.1, y) ∈ S ∧ (y, p.2) ∈ R }
+
+scoped postfix:max (priority := high) "⁻¹" => Relation.inv
+scoped infix:90 (priority := high) " ∘ " => Relation.comp
+
+end Relation
+
+macro_rules
+| `(tactic| unfold Subset $[$loc:location]?) => `(tactic| simp only [Subset.def] $[$loc]?)
+| `(tactic| unfold Inter $[$loc:location]?) => `(tactic| simp only [Inter.def] $[$loc]?)
+| `(tactic| unfold Union $[$loc:location]?) => `(tactic| simp only [Union.def] $[$loc]?)
+| `(tactic| unfold SDiff $[$loc:location]?) => `(tactic| simp only [SDiff.def] $[$loc]?)
+| `(tactic| unfold Empty $[$loc:location]?) => `(tactic| simp only [Empty.def] $[$loc]?)
+| `(tactic| unfold SetOf $[$loc:location]?) => `(tactic| simp only [SetOf.def] $[$loc]?)
+| `(tactic| unfold Enum $[$loc:location]?) =>
+  `(tactic|
+      (try simp only [Insert.forall, Insert.exists,
+        Singleton.forall, Singleton.exists,
+        Empty.forall, Empty.exists, -eq_self] $[$loc]?) <;>
+      (try simp only [Insert.def, Singleton.def, Empty.def, -eq_self] $[$loc]?))
